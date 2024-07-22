@@ -41,7 +41,7 @@ struct Args {
     #[arg(
         long,
         default_value = "0",
-        help = "job interval, unit: secound, 0 is disable"
+        help = "job interval, unit: second, 0 is disable"
     )]
     interval: u64,
 
