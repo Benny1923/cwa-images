@@ -31,15 +31,20 @@ $ cwa_images -h
 Usage: cwa_images.exe [OPTIONS] [DIR]
 
 Arguments:
-  [DIR]  [default: images]
+  [DIR]  download dir [default: images]
 
 Options:
-      --sat-img <SAT_IMG>
-      --radar-cloud <RADAR_CLOUD>  
-      --radar-rain <RADAR_RAIN>
-      --interval <INTERVAL>        [default: 0]
+      --sat-img <SAT_IMG>          download file with contain string
+      --radar-cloud <RADAR_CLOUD>  download file with contain string
+      --radar-rain <RADAR_RAIN>    download file with contain string. e.g. RCLY_3600
+  -i, --interval <INTERVAL>        job interval, unit: second, 0 is disable [default: 0]
   -d, --debug                      print debug message
   -h, --help                       Print help
+
+Custom:
+      --custom <CUSTOM>            download file with contain string
+      --custom-list <CUSTOM_LIST>  path of images list url. e.g. /Data/js/obs_img/Observe_lightning.js
+      --custom-dir <CUSTOM_DIR>    path of images dir. e.g. /Data/lightning/
 ```
 
 ## 版權聲明
