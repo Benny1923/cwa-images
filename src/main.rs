@@ -1,4 +1,7 @@
+use bytes::{Buf, Bytes};
 use clap::Parser;
+use futures_core::Stream;
+use futures_util::StreamExt;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn, LevelFilter};
 use parser::{find_objects, parse_source, CondKeys};
@@ -6,12 +9,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
-use std::io::{self, Cursor};
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::fs::{remove_file, File};
-use tokio::io::{copy, AsyncRead};
+use tokio::io::AsyncWriteExt;
 use tokio::time;
 use url::Url;
 
@@ -171,19 +173,25 @@ impl Task {
             if dest.is_file() {
                 debug!("skiped {}", dest.to_str().unwrap());
                 continue;
+            } else if dest.exists() {
+                return Err(format!("{} is directory", dest.to_str().unwrap()).into());
             }
-            let response = img.download(client, &self.dir).await;
-            match response {
-                Ok(resp) => {
-                    if let Ok(bytes) = resp.bytes().await {
-                        let mut reader = Cursor::new(bytes);
-                        let _ = save_file(&dest, &mut reader).await;
-                    }
+
+            let resp = img.download(client, &self.dir).await?.error_for_status()?;
+            let mut stream = resp.bytes_stream();
+            match save_stream(&dest, &mut stream).await {
+                Ok(size) => {
+                    info!(
+                        "saved {} {}",
+                        dest.to_str().unwrap(),
+                        human_size(size as usize)
+                    );
                 }
                 Err(err) => {
-                    error!("download image failed: {}", err);
+                    warn!("cannot save file {}", err);
+                    let _ = remove_file(dest).await;
                 }
-            };
+            }
         }
 
         Ok(())
@@ -274,26 +282,18 @@ fn check_dir(path: &Path) -> Result<(), std::io::Error> {
 }
 
 #[inline]
-async fn save_file<R: AsyncRead + Unpin + ?Sized>(dest: &Path, reader: &mut R) -> io::Result<u64> {
+async fn save_stream<T>(dest: &Path, stream: &mut T) -> Result<usize, Box<dyn Error>>
+where
+    T: Stream<Item = reqwest::Result<Bytes>> + std::marker::Unpin,
+{
     let mut file = File::create(dest).await?;
+    let mut writed = 0;
 
-    let result = copy(reader, &mut file).await;
-
-    match result {
-        Ok(size) => {
-            info!(
-                "saved {} {}",
-                dest.to_str().unwrap(),
-                human_size(size as usize)
-            );
-        }
-        Err(ref err) => {
-            warn!("cannot save file {}", err);
-            let _ = remove_file(dest).await;
-        }
+    while let Some(data) = stream.next().await {
+        writed += file.write(data?.chunk()).await?
     }
 
-    result
+    Ok(writed)
 }
 
 #[inline]
