@@ -164,8 +164,8 @@ impl Task {
     }
 
     async fn run(&self, client: &mut Client, out_dir: &Path) -> Result<(), Box<dyn Error>> {
-        let list = self.download_list(client).await?;
-        let target_imgs_iter = list.iter().filter(|x| x.img.contains(&self.contains));
+        let image_list = self.download_list(client).await?;
+        let target_imgs_iter = image_list.iter().filter(|x| x.img.contains(&self.contains));
 
         for img in target_imgs_iter {
             let dest = out_dir.join(img.filename());
@@ -177,8 +177,15 @@ impl Task {
                 return Err(format!("{} is directory", dest.to_str().unwrap()).into());
             }
 
-            let resp = img.download(client, &self.dir).await?.error_for_status()?;
-            let mut stream = resp.bytes_stream();
+            let Ok(resp) = img.download(client, &self.dir).await else {
+                continue;
+            };
+
+            let Ok(resp_no_err) = resp.error_for_status() else {
+                continue;
+            };
+
+            let mut stream = resp_no_err.bytes_stream();
             match save_stream(&dest, &mut stream).await {
                 Ok(size) => {
                     info!(
